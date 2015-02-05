@@ -18,7 +18,7 @@
 -- PARAMETERS
 --   1. SQL_ID (required)
 --   2. PLAN_HASH_VALUE (required)
---	 3.	DAYS_BACK (optional, default 10)
+--   3.	DAYS_BACK (optional, default 10)
 --
 -- (C) 2015 Nikos Karagiannidis - http://oradwstories.blogspot.com    
 -- ----------------------------------------------------------------------------------------------
