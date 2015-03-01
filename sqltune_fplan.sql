@@ -7,9 +7,10 @@
 --	This script uses the concept of the SQL plan baseline in order to fix the plan of a specific sql id.
 --	"Fixing" here is not with the strict meaning of SQL plan baselines "fixed plans". The script loads
 --	the input plan into an SQL Plan Baseline (if one does not exist then Oracle will create one) as an
---	"enabled" and "accepted" plan. The plan will not be "fixed", which means that we will allow to the
+--	"enabled" and "accepted" plan. The plan (by default) will not be "fixed", which means that we will allow to the
 --	SQL Plan Baseline to evolve (see http://oradwstories.blogspot.gr/2014/07/sql-plan-management-sql-plan-baselines.html
---	for more info). The plan must be loaded either in the cursor cache, or in AWR for the script to work.
+--	for more info), unless you provide "Y" in the FIXED input parameter. The plan must be loaded either in the cursor cache, 
+--      or in AWR for the script to work.
 --
 -- PRE-REQUISITES
 --   1. Have in cache or AWR the input plan.
@@ -19,6 +20,7 @@
 --   1. SQL_ID (required)
 --   2. PLAN_HASH_VALUE (required)
 --   3.	DAYS_BACK (optional, default 10)
+--   4. FIXED (optional, default N)
 --
 -- (C) 2015 Nikos Karagiannidis - http://oradwstories.blogspot.com    
 -- ----------------------------------------------------------------------------------------------
@@ -42,6 +44,9 @@ DEF plan_hash_value = '&2';
 PRO
 PRO Parameter 3:
 ACCEPT	days_back NUMBER DEFAULT 10 PROMPT 'Specify the number of days back from SYSDATE for which you want to search the AWR (default 10):'
+PRO
+PRO Parameter 4:
+ACCEPT	fixed CHAR  PROMPT 'Loaded plan is used as a fixed plan Y/N (default N):'
 
 VARIABLE	g_app_error_flag NUMBER
 EXEC	:g_app_error_flag := 0;
@@ -71,17 +76,24 @@ exec :g_sqlid := trim('&&sql_id')
 var g_phv NUMBER
 exec :g_phv := &&plan_hash_value
 
+var g_fixed	VARCHAR2(15)
+exec select decode(upper(trim(nvl('&&fixed', 'N'))), 'Y', 'YES', 'N', 'NO', 'invalid value') into :g_fixed from dual
+
 -- if the plan is in the cursor cache, then load it directly in a SQL plan baseline
 declare
 	l_i	pls_integer;
 	--g_sqlid varchar2(30) := trim('&&sql_id');
 	--g_phv	number := &&plan_hash_value;
 begin
+-- DEBUG -------------------------------------
+--DBMS_OUTPUT.PUT_LINE('***DEBUG***:	fixed = '||:g_fixed);
+----------------------------------------------
 	if(:g_plan_found_in_cache > 0) then
 		-- load plan from cursor cache
 		l_i:= DBMS_SPM.LOAD_PLANS_FROM_CURSOR_CACHE (
 			sql_id  => :g_sqlid,
-			plan_hash_value   => :g_phv);
+			plan_hash_value   => :g_phv,
+			fixed => :g_fixed);
 			
 		if (l_i <> 1) then
 			--:g_app_error_flag := 1;
@@ -177,7 +189,8 @@ begin
 		-- Create the Baseline from the STS					 
 		l_i := DBMS_SPM.LOAD_PLANS_FROM_SQLSET (
 				sqlset_name    => l_stsname,
-				sqlset_owner   => :g_ps_name);		
+				sqlset_owner   => :g_ps_name,
+				fixed => :g_fixed);		
 				
 		if (l_i <> 1) then
 			:g_app_error_flag := 1;
@@ -298,7 +311,7 @@ from (
 where
 	rownum = 1
 /	
-
+	
 PROMPT
 PROMPT *** And the plan is the following ...
 PROMPT (note that the plan hash value might be different)
@@ -317,6 +330,7 @@ UNDEF	ref_date
 UNDEF	days_back
 UNDEF	sql_handle
 UNDEF	plan_name
+UNDEF	fixed
 @sqlplus_get_settings 
 
 
